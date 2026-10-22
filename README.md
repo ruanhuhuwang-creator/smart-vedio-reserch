@@ -1,5 +1,24 @@
 # SmartVision 智能视频分析与检索
 
+## 源码仓库与学习导航
+
+- [迭代记录](CHANGELOG.md)：第一阶段至最新数量统计/停止分析的功能演进。
+- [学习路线](docs/LEARNING_GUIDE.md)：按数据流阅读核心、服务、数据库、API 和 Vue，并运行测试。
+- [历史快照来源与版本对比](docs/ITERATIONS.md)：哪些版本能真实回溯，如何查看每次修改。
+- [许可证](LICENSE)及[第三方许可说明](packaging/DISTRIBUTION_LICENSE.md)。
+
+```powershell
+git clone https://github.com/ruanhuhuwang-creator/smart-vedio-reserch.git
+cd smart-vedio-reserch
+git log --oneline --decorate
+```
+
+仓库包含源码、测试、前端依赖锁文件、构建脚本和各阶段验收文档。
+视频、模型权重、SQLite 运行数据、虚拟环境、node_modules 及 EXE/ZIP 不进入 Git。
+下文 release 路径是本机构建产物位置，并非仓库中的下载文件；新电脑请按环境安装和打包说明构建。
+
+新增时间段数量统计与单任务停止分析，见 [COUNTS_CANCEL_VALIDATION.md](COUNTS_CANCEL_VALIDATION.md)。
+
 片尾时间戳容错修复与新版本验收见 [PTS_HOTFIX_VALIDATION.md](PTS_HOTFIX_VALIDATION.md)。
 
 前后端分离：Vue 3 + Vite 前端通过 REST API 调用 Python 3.11 + FastAPI 后端。
@@ -12,7 +31,8 @@
 完整解压发布 ZIP 后运行 `SmartVision.exe`，无需安装 Python/Node 或手动启动服务。
 默认用户数据和日志在 `%LOCALAPPDATA%\SmartVision`，不会使用或迁移开发目录中的 data。
 
-最新片尾 PTS 修复版：`release/20261021-pts-hotfix/dist/SmartVision/`；归档：`release/20261021-pts-hotfix/SmartVision-win64-pts-fixed.zip`。
+最新数量统计/停止分析版：`release/20261022-counts-cancel/dist/SmartVision/`；归档：`release/20261022-counts-cancel/SmartVision-win64-counts-cancel.zip`。
+片尾 PTS 修复仍保留，历史交付 `release/20261021-pts-hotfix/` 不删除。
 首版交付 `release/20261021-111002/` 保留；修复版真实 EXE 验证及测试结果见 `PTS_HOTFIX_VALIDATION.md`。
 目录约 4.99 GB、ZIP 约 3.09 GB，主要体积来自保留的 CUDA 版 PyTorch 运行库。
 完整验证及未验证项见 `PHASE5_VALIDATION.md`，普通用户说明见 `packaging/USER_GUIDE.md`，构建说明见 `packaging/README_PACKAGING.md`。

@@ -11,14 +11,15 @@ export interface AnalysisOptions {
   sample_fps: number; imgsz: 416 | 640 | 960; confidence: number; force_rebuild: boolean
 }
 export interface Task {
-  task_id: string; video_id: number; status: 'queued' | 'running' | 'succeeded' | 'failed'
+  task_id: string; video_id: number; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+  cancel_requested?: boolean
   progress: number | null; progress_is_estimate: boolean; processed_frames: number
   total_frames: number | null; index_reused: boolean; created_at: string
   started_at: string | null; finished_at: string | null; error_message: string | null
 }
 export interface VideoEvent {
   event_id: number; video_id: number; category: string
-  start_time: number; end_time: number; duration: number
+  start_time: number; end_time: number; duration: number; max_count?: number
 }
 export interface EventPage {
   video_id: number; analysis_status: string; index_available: boolean

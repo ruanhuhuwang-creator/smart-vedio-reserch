@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, errorMessage, request } from '@/api/client'
 import { analyzeVideo, getAnalysisContract, getEvents, getVideo, listVideos } from '@/api/videos'
 import { useTaskPolling } from '@/composables/useTaskPolling'
+import { cancelTask } from '@/api/tasks'
 import { readLocal, writeLocal } from '@/utils/storage'
 import type { AnalysisContract, AnalysisOptions, EventPage, Video, VideoEvent, VideoPage } from '@/types/api'
 import VideoUploader from '@/components/VideoUploader.vue'
@@ -18,11 +19,14 @@ const production = import.meta.env.PROD
 const offset = ref(0), listLoading = ref(false), listError = ref(''), detailLoading = ref(false), detailError = ref('')
 const contract = ref<AnalysisContract | null>(null), contractError = ref(''), service = ref('连接中')
 const submitting = ref(false), analysisError = ref(''), taskId = ref<string | null>(null)
-const { task, error: taskError, retry: retryTask } = useTaskPolling(taskId)
+const { task, error: taskError, retry: retryTask, accept: acceptTask } = useTaskPolling(taskId)
+const cancellingId = ref<string | null>(null), cancelError = ref('')
+const activeTaskId = computed(() => selected.value?.active_task_id || (task.value?.video_id === selected.value?.video_id && ['queued', 'running'].includes(task.value?.status || '') ? task.value?.task_id : null))
+const stopping = computed(() => !!activeTaskId.value && (cancellingId.value === activeTaskId.value || (task.value?.task_id === activeTaskId.value && !!task.value?.cancel_requested)))
 const category = ref('person'), eventPage = ref<EventPage | null>(null), eventLoading = ref(false), eventError = ref(''), notReady = ref(false), searched = ref(false)
 const activeId = ref<number | null>(null), currentTime = ref(0), player = ref<InstanceType<typeof VideoPlayer>>()
 const events = computed(() => eventPage.value?.events || [])
-const previous = computed(() => !!selected.value?.index_available && (eventPage.value?.using_previous_index || ['queued', 'running', 'failed'].includes(selected.value.analysis_status)))
+const previous = computed(() => !!selected.value?.index_available && (eventPage.value?.using_previous_index || ['queued', 'running', 'failed', 'cancelled'].includes(selected.value.analysis_status)))
 let listController: AbortController | undefined, detailController: AbortController | undefined, eventController: AbortController | undefined
 let disposed = false
 let selectionVersion = 0
@@ -59,7 +63,7 @@ async function selectVideo(id: number) {
   const controller = new AbortController(); detailController = controller
   taskId.value = null; selected.value = null; eventPage.value = null; activeId.value = null
   eventError.value = ''; notReady.value = false; searched.value = false; eventLoading.value = false
-  detailError.value = ''; analysisError.value = ''; detailLoading.value = true
+  detailError.value = ''; analysisError.value = ''; cancelError.value = ''; detailLoading.value = true
   try {
     const video = await getVideo(id, controller.signal)
     if (controller.signal.aborted) return
@@ -100,7 +104,7 @@ async function search() {
 async function submit(options: AnalysisOptions) {
   if (!selected.value || submitting.value) return
   const id = selected.value.video_id
-  submitting.value = true; analysisError.value = ''
+  submitting.value = true; analysisError.value = ''; cancelError.value = ''
   try {
     const result = await analyzeVideo(id, options)
     writeLocal(`video:${id}:task`, result.task_id)
@@ -116,12 +120,28 @@ async function submit(options: AnalysisOptions) {
     }
   } finally { submitting.value = false }
 }
+async function stopAnalysis() {
+  const id = activeTaskId.value, version = selectionVersion
+  if (!id || stopping.value) return
+  cancellingId.value = id; cancelError.value = ''
+  try {
+    const result = await cancelTask(id)
+    if (disposed || selectionVersion !== version || taskId.value !== id) return
+    acceptTask(result)
+  } catch (error) {
+    if (!disposed && selectionVersion === version && taskId.value === id) {
+      cancelError.value = errorMessage(error)
+      if (error instanceof ApiError && error.status === 409) { retryTask(); void refreshSelected() }
+    }
+  } finally { if (cancellingId.value === id) cancellingId.value = null }
+}
 watch(category, () => void search())
 watch(task, (value, old) => {
   if (!value || value.video_id !== selected.value?.video_id) return
   writeLocal(`video:${value.video_id}:task`, value.task_id)
   if (value.status === 'queued' || value.status === 'running') selected.value = { ...selected.value, active_task_id: value.task_id, analysis_status: value.status }
   else if (value.status !== old?.status || value.task_id !== old?.task_id) {
+    selected.value = { ...selected.value, active_task_id: null, analysis_status: value.status === 'succeeded' ? 'completed' : value.status, index_available: value.status === 'succeeded' || selected.value.index_available }
     void (async () => { await refreshSelected(); if (!disposed && selected.value?.video_id === value.video_id) void search() })()
     void loadList()
   }
@@ -140,7 +160,7 @@ onBeforeUnmount(() => { disposed = true; listController?.abort(); detailControll
       <div class="dashboard-grid">
         <aside class="left-column"><VideoUploader @uploaded="uploaded" /><VideoList :page="page" :selected-id="selected?.video_id" :loading="listLoading" :error="listError" @select="selectVideo" @page="loadList" @refresh="loadList()" /></aside>
         <div class="center-column"><p v-if="detailLoading" class="notice" role="status">正在加载视频详情…</p><p v-if="detailError" class="error panel" role="alert">视频详情：{{ detailError }}</p><VideoPlayer ref="player" :video="selected" @time="currentTime = $event" /><EventTimeline :events="events" :duration="selected?.duration || 0" :current-time="currentTime" :active-id="activeId" :ready="searched" @select="jump" /></div>
-        <aside class="right-column"><AnalysisPanel :video="selected" :contract="contract" :contract-error="contractError" :submitting="submitting" :error="analysisError" @submit="submit" @retry-contract="loadContract" /><TaskProgress :task="task" :task-id="taskId" :error="taskError" @retry="retryTask" /></aside>
+        <aside class="right-column"><AnalysisPanel :video="selected" :contract="contract" :contract-error="contractError" :submitting="submitting" :error="analysisError" :can-stop="!!activeTaskId" :stopping="stopping" :stop-error="cancelError" @submit="submit" @stop="stopAnalysis" @retry-contract="loadContract" /><TaskProgress :task="task" :task-id="taskId" :error="taskError" @retry="retryTask" /></aside>
         <EventSearch v-model:category="category" :video="selected" :events="events" :loading="eventLoading" :error="eventError" :not-ready="notReady" :previous="previous" :searched="searched" :active-id="activeId" @refresh="search" @select="jump" />
       </div>
     </main>

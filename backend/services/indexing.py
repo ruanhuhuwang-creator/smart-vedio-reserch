@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from contextlib import nullcontext
 from hashlib import sha256
 from importlib.metadata import version, PackageNotFoundError
 import json
@@ -37,8 +38,10 @@ class IndexingService:
 
     def analyze(self, input_path: Path, *, detection: DetectionConfig = DetectionConfig(),
                 indexing: IndexConfig = IndexConfig(), force: bool = False,
-                on_start=None, on_progress=None, on_device=None) -> IndexSummary:
+                on_start=None, on_progress=None, on_device=None, check_cancel=None, publish_guard=None) -> IndexSummary:
         started = perf_counter()
+        if check_cancel:
+            check_cancel()
         path = Path(input_path).resolve()
         with VideoReader(path) as reader:
             info = reader.info
@@ -46,6 +49,8 @@ class IndexingService:
             on_start(info)
         stat = path.stat()
         content_hash = file_hash(path)
+        if check_cancel:
+            check_cancel()
         detector = None
         # Download missing weights before computing the stable cache key.
         if not detection.weights.is_file():
@@ -62,14 +67,19 @@ class IndexingService:
         if reused:
             video = self.repository.get_video(video_id)
             if video["merge_gap"] != indexing.merge_gap or video["min_samples"] != indexing.min_samples:
-                self.rebuild_events(video_id, indexing.merge_gap, indexing.min_samples)
+                with (publish_guard() if publish_guard else nullcontext()):
+                    if check_cancel:
+                        check_cancel()
+                    self.rebuild_events(video_id, indexing.merge_gap, indexing.min_samples)
             return IndexSummary(video_id, True, video["sampled_frames"],
                                 self.repository.counts(video_id)["detections"], perf_counter() - started)
         try:
             detector = detector or self.detector_factory(detection)
             if on_device:
                 on_device(getattr(detector, "device", "mock"))
-            with self.repository.replace_index(video_id) as writer:
+            if check_cancel:
+                check_cancel()
+            with self.repository.replace_index(video_id, publish_guard=publish_guard) as writer:
                 summary = VideoAnalyzer(detector).scan(path, analysis_fps=indexing.analysis_fps,
                                                       on_frame=writer.add_frame, on_progress=on_progress)
                 now = path.stat()
@@ -78,6 +88,8 @@ class IndexingService:
                 writer.merge_events(summary.duration_seconds, indexing.merge_gap,
                                     indexing.min_samples, merge_observations)
                 writer.complete(summary, key, detection, indexing)
+                if check_cancel:
+                    check_cancel()
             return IndexSummary(video_id, False, summary.analyzed_frames,
                                 summary.detection_count, perf_counter() - started)
         except BaseException as exc:

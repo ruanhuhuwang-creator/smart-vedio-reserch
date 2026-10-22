@@ -7,7 +7,7 @@ export function time(seconds: number, fraction = false) {
   return `${hours ? `${hours}:` : ''}${String(minutes).padStart(2, '0')}:${secs}`
 }
 export const bytes = (value: number) => `${(value / 1024 / 1024).toFixed(1)} MB`
-export const statusLabel: Record<string, string> = { not_analyzed: '待分析', queued: '排队中', running: '分析中', completed: '已建立索引', succeeded: '分析成功', failed: '分析失败' }
+export const statusLabel: Record<string, string> = { not_analyzed: '待分析', queued: '排队中', running: '分析中', completed: '已建立索引', succeeded: '分析成功', failed: '分析失败', cancelled: '已停止' }
 export const categories = [
   { key: 'person', name: '行人', color: '#46d9b6' }, { key: 'car', name: '汽车', color: '#65a7ff' },
   { key: 'bicycle', name: '自行车', color: '#b79aff' }, { key: 'motorcycle', name: '摩托车', color: '#f3bc69' },

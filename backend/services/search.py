@@ -6,7 +6,8 @@ class SearchService:
     def __init__(self, repository: IndexRepository):
         self.repository = repository
 
-    def search(self, class_name: str | None, video_id: int | None = None, start_time=None, end_time=None):
+    def search(self, class_name: str | None, video_id: int | None = None, start_time=None, end_time=None,
+               *, include_counts=False):
         if class_name is not None:
             class_name = class_name.strip().lower()
             if not class_name:
@@ -18,4 +19,4 @@ class SearchService:
                 raise ValueError("查询时间必须为有限非负数")
         if start_time is not None and end_time is not None and end_time < start_time:
             raise ValueError("end_time 不能早于 start_time")
-        return self.repository.search(class_name, video_id, start_time, end_time)
+        return self.repository.search(class_name, video_id, start_time, end_time, include_counts=include_counts)

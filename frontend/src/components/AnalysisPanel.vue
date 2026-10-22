@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { AnalysisContract, AnalysisOptions, Video } from '@/types/api'
-const props = defineProps<{ video: Video | null; contract: AnalysisContract | null; contractError: string; submitting: boolean; error: string }>()
-defineEmits<{ submit: [options: AnalysisOptions]; retryContract: [] }>()
+const props = defineProps<{ video: Video | null; contract: AnalysisContract | null; contractError: string; submitting: boolean; error: string; canStop?: boolean; stopping?: boolean; stopError?: string }>()
+defineEmits<{ submit: [options: AnalysisOptions]; retryContract: []; stop: [] }>()
 const options = ref<AnalysisOptions>({ sample_fps: 2, imgsz: 640, confidence: .35, force_rebuild: false })
 watch(() => props.contract, value => { if (value) options.value = { ...value.defaults } }, { immediate: true })
 watch(() => props.video?.video_id, () => { options.value.force_rebuild = false })
@@ -25,6 +25,9 @@ const modes = [{ size: 416, name: '快速', note: '更低开销' }, { size: 640,
     <p v-if="contractError" class="error" role="alert">{{ contractError }} <button class="text-button" @click="$emit('retryContract')">重新读取参数</button></p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <button class="primary wide" :disabled="!video || !valid || active || submitting" @click="$emit('submit', { ...options })">{{ submitting ? '正在提交…' : active ? '任务进行中' : '▷  开始分析' }}</button>
+    <button class="stop-analysis wide" :disabled="!canStop || stopping || submitting" @click="$emit('stop')">{{ stopping ? '正在停止…' : '□  停止分析' }}</button>
+    <p v-if="stopping" class="hint">等待当前推理或解码结束；原视频及已有有效索引会保留。</p>
+    <p v-if="stopError" class="error" role="alert">{{ stopError }}</p>
     <p class="footnote">稀疏采样的事件边界存在误差；检测结果仅供辅助判断。</p>
   </section>
 </template>

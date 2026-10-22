@@ -10,6 +10,7 @@ datas = [
     (str(root / 'models' / 'yolo26n.pt'), 'models'),
     (str(root / 'backend' / 'database' / 'schema.sql'), 'backend/database'),
     (str(root / 'backend' / 'database' / 'migration_v2.sql'), 'backend/database'),
+    (str(root / 'backend' / 'database' / 'migration_v3.sql'), 'backend/database'),
     (str(stage / 'licenses'), 'licenses'),
 ]
 datas += collect_data_files('ultralytics', includes=['cfg/**/*.yaml'])

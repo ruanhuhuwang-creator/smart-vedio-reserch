@@ -94,6 +94,17 @@ class APIRepository:
             conn.execute("UPDATE analysis_tasks SET status='failed',error_message=?,finished_at=? "
                          "WHERE task_id=? AND status IN ('queued','running')", (error[:2000], utc_now(), task_id))
 
+    def request_cancel(self, task_id):
+        with self.index.transaction() as conn:
+            conn.execute("UPDATE analysis_tasks SET cancel_requested=1 WHERE task_id=? "
+                         "AND status IN ('queued','running')", (task_id,))
+
+    def cancelled(self, task_id):
+        with self.index.transaction() as conn:
+            conn.execute("UPDATE analysis_tasks SET status='cancelled',cancel_requested=1,"
+                         "error_message=NULL,finished_at=? WHERE task_id=? AND status IN ('queued','running')",
+                         (utc_now(), task_id))
+
     def recover_interrupted(self):
         message = "服务上次停止时任务未完成，已标记失败；请重新提交分析任务"
         with self.index.transaction() as conn:
@@ -101,5 +112,6 @@ class APIRepository:
             for row in videos:
                 conn.execute("UPDATE videos SET status=CASE WHEN analysis_key IS NULL THEN 'failed' ELSE 'completed' END,"
                              "last_error=? WHERE id=? AND status='analyzing'", (message, row[0]))
-            conn.execute("UPDATE analysis_tasks SET status='failed',error_message=?,finished_at=? "
+            conn.execute("UPDATE analysis_tasks SET status=CASE WHEN cancel_requested=1 THEN 'cancelled' ELSE 'failed' END,"
+                         "error_message=CASE WHEN cancel_requested=1 THEN NULL ELSE ? END,finished_at=? "
                          "WHERE status IN ('queued','running')", (message, utc_now()))

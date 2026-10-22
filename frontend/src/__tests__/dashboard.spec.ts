@@ -2,12 +2,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import DashboardView from '@/views/DashboardView.vue'
 import * as videos from '@/api/videos'
-import { getTask } from '@/api/tasks'
+import { getTask, cancelTask } from '@/api/tasks'
 import { ApiError } from '@/api/client'
 import { writeLocal } from '@/utils/storage'
 import { video, event, task, contract } from './fixtures'
 vi.mock('@/api/videos', () => ({ listVideos: vi.fn(), getVideo: vi.fn(), getEvents: vi.fn(), getAnalysisContract: vi.fn(), analyzeVideo: vi.fn(), uploadVideo: vi.fn(), diagnoseStream: vi.fn() }))
-vi.mock('@/api/tasks', () => ({ getTask: vi.fn() }))
+vi.mock('@/api/tasks', () => ({ getTask: vi.fn(), cancelTask: vi.fn() }))
 vi.mock('@/api/client', async importOriginal => ({ ...await importOriginal<typeof import('@/api/client')>(), request: vi.fn().mockResolvedValue({ status: 'ok' }) }))
 let wrapper: ReturnType<typeof mount> | undefined
 beforeEach(() => {
@@ -55,4 +55,24 @@ it('提交成功保存 task_id，由轮询独立取得结果', async () => {
   expect(getTask).toHaveBeenCalledWith(task.task_id, expect.any(AbortSignal))
   expect(videos.analyzeVideo).toHaveBeenCalledWith(1, contract.defaults)
   expect(wrapper.text()).toContain('分析成功')
+})
+it('停止当前任务，收到取消终态后恢复开始按钮', async () => {
+  vi.mocked(videos.getVideo).mockResolvedValueOnce({ ...video, analysis_status: 'running', active_task_id: task.task_id }).mockResolvedValue({ ...video, analysis_status: 'cancelled' })
+  vi.mocked(getTask).mockResolvedValue({ ...task, status: 'running', progress: 20 })
+  vi.mocked(cancelTask).mockResolvedValue({ ...task, status: 'cancelled', cancel_requested: true })
+  wrapper = mount(DashboardView); await flushPromises()
+  await wrapper.get('.stop-analysis').trigger('click'); await flushPromises()
+  expect(cancelTask).toHaveBeenCalledExactlyOnceWith(task.task_id)
+  expect(wrapper.text()).toContain('已停止')
+  expect(wrapper.get('.analysis-panel .primary').attributes('disabled')).toBeUndefined()
+  expect(videos.analyzeVideo).not.toHaveBeenCalled()
+})
+it('停止请求失败显示原因，不重复发送', async () => {
+  vi.mocked(videos.getVideo).mockResolvedValue({ ...video, analysis_status: 'running', active_task_id: task.task_id })
+  vi.mocked(getTask).mockResolvedValue({ ...task, status: 'running' })
+  vi.mocked(cancelTask).mockRejectedValue(new Error('停止请求超时'))
+  wrapper = mount(DashboardView); await flushPromises()
+  await wrapper.get('.stop-analysis').trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('停止请求超时')
+  expect(cancelTask).toHaveBeenCalledTimes(1)
 })

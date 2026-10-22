@@ -27,3 +27,25 @@ frontend/playwright-report/
 release/
 build/
 packaging/vendor/
+# Keep runtime assets and credentials out even if copied outside data/release.
+*.pt
+*.pth
+*.onnx
+*.engine
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.zip
+*.7z
+*.exe
+*.dll
+*.log
+*.db
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.pem
+*.p12
+*.pfx

@@ -338,7 +338,7 @@ def test_v1_migration_preserves_records(tmp_path):
     assert repo.counts(1) == {"detections": 1, "events": 1}
     assert repo.get_video(1)["analysis_key"] == "key"
     with repo.connection() as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_progress_is_not_success(api, video):

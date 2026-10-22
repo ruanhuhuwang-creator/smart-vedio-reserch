@@ -42,7 +42,8 @@ class AppPaths:
 
     def verify(self):
         required = ['frontend/dist/index.html', 'models/yolo26n.pt',
-                    'backend/database/schema.sql', 'backend/database/migration_v2.sql']
+                    'backend/database/schema.sql', 'backend/database/migration_v2.sql',
+                    'backend/database/migration_v3.sql']
         if getattr(sys, 'frozen', False):
             required.append('bin/ffprobe.exe')
         missing = [name for name in required if not (self.resources / name).is_file()]

@@ -1,4 +1,4 @@
-param([string]$Python = '', [string]$OutputRoot = '', [switch]$Console)
+param([string]$Python = '', [string]$OutputRoot = '', [switch]$Console, [switch]$SkipArchive)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 if (!$Python) { $Python = Join-Path $projectRoot '.venv\Scripts\python.exe' }
@@ -30,17 +30,21 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "PyInstaller 失败（$LASTEXITCODE），请查看 $buildLog 及重试日志" }
     }
     $application = Join-Path $dist 'SmartVision'
-    foreach ($file in @('SmartVision.exe','_internal\python311.dll','_internal\models\yolo26n.pt','_internal\bin\ffprobe.exe','_internal\frontend\dist\index.html','_internal\backend\database\schema.sql')) {
+    & $Python -X utf8 (Join-Path $PSScriptRoot 'verify_sources.py') --exe (Join-Path $application 'SmartVision.exe') --report (Join-Path $OutputRoot 'source-match.json')
+    if ($LASTEXITCODE -ne 0) { throw '内嵌代码校验失败；请保留日志并使用全新输出目录重建' }
+    foreach ($file in @('SmartVision.exe','_internal\python311.dll','_internal\models\yolo26n.pt','_internal\bin\ffprobe.exe','_internal\frontend\dist\index.html','_internal\backend\database\schema.sql','_internal\backend\database\migration_v3.sql')) {
         if (!(Test-Path -LiteralPath (Join-Path $application $file))) { throw "关键文件缺失：$file" }
     }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'USER_GUIDE.md') -Destination (Join-Path $application '使用说明.md')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README_PACKAGING.md') -Destination (Join-Path $application '构建说明.md')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'DISTRIBUTION_LICENSE.md') -Destination (Join-Path $application '源码与许可.md')
     # Python zipfile uses ZIP64; Compress-Archive cannot safely package >2GB DLLs.
-    & $Python -X utf8 (Join-Path $PSScriptRoot 'finish_release.py') --folder $application --zip (Join-Path $OutputRoot 'SmartVision-win64.zip')
-    if ($LASTEXITCODE -ne 0) { throw 'ZIP64 归档或核验失败' }
+    if (!$SkipArchive) {
+        & $Python -X utf8 (Join-Path $PSScriptRoot 'finish_release.py') --folder $application --zip (Join-Path $OutputRoot 'SmartVision-win64.zip')
+        if ($LASTEXITCODE -ne 0) { throw 'ZIP64 归档或核验失败' }
+        Write-Output "分发 ZIP：$(Join-Path $OutputRoot 'SmartVision-win64.zip')"
+    } else { Write-Warning '已跳过归档；实际 EXE 验收并补齐报告后，请调用 finish_release.py 生成最终 ZIP。' }
     Write-Output "应用目录：$application"
-    Write-Output "分发 ZIP：$(Join-Path $OutputRoot 'SmartVision-win64.zip')"
     Write-Output "构建日志：$buildLog"
     Write-Warning '生成产物后仍需实际运行 EXE 验证 CUDA、CPU、持久化和退出；生成 EXE 不等于验收成功。'
 } finally { Pop-Location }

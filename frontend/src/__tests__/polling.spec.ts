@@ -48,4 +48,13 @@ describe('任务轮询生命周期', () => {
     state.id.value = 'b'; await nextTick(); await flushPromises(); scopes[0]!.stop(); await vi.advanceTimersByTimeAsync(8000)
     expect(getTask).toHaveBeenCalledTimes(2)
   })
+  it('接受停止响应后取消旧请求，迟到的 running 不能覆盖 cancelled', async () => {
+    let complete!: (value: typeof task) => void
+    vi.mocked(getTask).mockImplementationOnce(() => new Promise(resolve => { complete = resolve }))
+    const state = start()
+    state.accept({ ...task, task_id: 'a', status: 'cancelled', cancel_requested: true })
+    complete({ ...task, task_id: 'a', status: 'running' }); await flushPromises()
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(state.task.value?.status).toBe('cancelled'); expect(getTask).toHaveBeenCalledTimes(1)
+  })
 })

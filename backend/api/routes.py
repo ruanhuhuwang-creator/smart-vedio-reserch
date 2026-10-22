@@ -37,6 +37,11 @@ def task_detail(task_id: str, request: Request):
     return task
 
 
+@router.post("/tasks/{task_id}/cancel", response_model=TaskResponse, status_code=202, tags=["analysis"])
+def cancel_analysis(task_id: str, request: Request):
+    return request.app.state.tasks.cancel(task_id)
+
+
 @router.get("/videos/{video_id}/events", response_model=EventList, tags=["events"])
 def video_events(video_id: int, request: Request, category: str | None = Query(None, min_length=1, max_length=80),
                  start_time: float | None = Query(None, ge=0, allow_inf_nan=False),
@@ -47,13 +52,14 @@ def video_events(video_id: int, request: Request, category: str | None = Query(N
         raise HTTPException(409, {"code": "index_not_ready", "analysis_status": video["analysis_status"],
                                   "active_task_id": video["active_task_id"], "message": "尚无有效索引，请先完成分析"})
     try:
-        events = SearchService(request.app.state.index).search(category, video_id, start_time, end_time)
+        events = SearchService(request.app.state.index).search(category, video_id, start_time, end_time, include_counts=True)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"video_id": video_id, "analysis_status": video["analysis_status"], "index_available": True,
-            "using_previous_index": video["analysis_status"] in {"queued", "running", "failed"},
+            "using_previous_index": video["analysis_status"] in {"queued", "running", "failed", "cancelled"},
             "events": [{"event_id": item["event_id"], "video_id": video_id, "category": item["class_name"],
-                        "start_time": item["start_time"], "end_time": item["end_time"], "duration": item["duration"]}
+                        "start_time": item["start_time"], "end_time": item["end_time"], "duration": item["duration"],
+                        "max_count": item["max_count"]}
                        for item in events]}
 
 

@@ -40,7 +40,8 @@ class VideoList(BaseModel):
 class TaskResponse(BaseModel):
     task_id: str
     video_id: int
-    status: Literal["queued", "running", "succeeded", "failed"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    cancel_requested: bool = False
     progress: float | None
     progress_is_estimate: bool
     processed_frames: int
@@ -59,6 +60,7 @@ class EventResponse(BaseModel):
     start_time: float
     end_time: float
     duration: float
+    max_count: int = Field(ge=0, description="事件内各采样帧检测框数量的最大值，不是去重累计数量")
 
 
 class EventList(BaseModel):

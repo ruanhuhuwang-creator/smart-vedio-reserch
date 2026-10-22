@@ -21,8 +21,8 @@ def public_video(row):
         status = task_status
     elif row["status"] == "analyzing":
         status = "running"
-    elif task_status == "failed":
-        status = "failed"
+    elif task_status in {"failed", "cancelled"}:
+        status = task_status
     elif row["analysis_key"]:
         status = "completed"
     elif row["last_error"]:

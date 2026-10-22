@@ -8,6 +8,8 @@
 # 项目根目录，现有虚拟环境没有 pip 时用 uv
 python -m uv pip install --python .venv/Scripts/python.exe -r packaging/requirements-build.txt
 .\packaging\build_windows.ps1
+# 或先生成 EXE，验收并补齐报告后再调用 finish_release.py 打最终 ZIP
+.\packaging\build_windows.ps1 -SkipArchive
 ```
 
 需要现有 frontend/node_modules 或先运行 frontend/run.ps1 install；需要本地 models/yolo26n.pt，
@@ -57,6 +59,8 @@ GUI 版不输出控制台，结果写入数据目录日志/diagnostics.json。--
 
 ```powershell
 .\.venv\Scripts\python.exe -m tests.validate_packaged_runtime --exe '你的分发目录\SmartVision.exe' --source '含行人的本地MP4.mp4'
+# 数量/取消专项：old-data 指向已有 v2 验收数据，驱动只操作其复制品
+.\.venv\Scripts\python.exe -m tests.validate_counts_cancel --exe '你的分发目录\SmartVision.exe' --old-data '旧v2验收数据目录'
 ```
 
 该驱动使用开发环境的 Python/Node 控制测试，EXE 子进程的 PATH 仅包含 Windows 系统目录，Python/虚拟环境变量被清除。

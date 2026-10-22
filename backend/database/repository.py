@@ -1,8 +1,10 @@
 """SQLite access boundary. Detection/model code never knows about SQL."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+import logging
 from pathlib import Path
 import sqlite3
 import tempfile
+from uuid import uuid4
 
 from backend.core.analyzer import FrameResult, ScanSummary
 from backend.core.video_io import VideoInfo
@@ -18,8 +20,13 @@ class IndexRepository:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as conn:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2):
+            if version not in (0, 1, 2, 3):
                 raise RuntimeError(f"不支持的 SQLite 数据库版本: {version}")
+            if version in (1, 2):
+                backup = self.path.with_name(self.path.name + f".pre-v3.{uuid4().hex[:8]}.sqlite3")
+                with sqlite3.connect(backup) as destination:
+                    conn.backup(destination)
+                logging.getLogger(__name__).info("数据库升级前备份已保存: %s", backup)
             if conn.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
                 conn.execute("PRAGMA journal_mode=WAL")
             if version == 0:
@@ -28,6 +35,10 @@ class IndexRepository:
                 version = 1
             if version == 1:
                 migration = Path(__file__).with_name("migration_v2.sql").read_text(encoding="utf-8")
+                conn.executescript("BEGIN IMMEDIATE;\n" + migration + "\nCOMMIT;")
+                version = 2
+            if version == 2:
+                migration = Path(__file__).with_name("migration_v3.sql").read_text(encoding="utf-8")
                 conn.executescript("BEGIN IMMEDIATE;\n" + migration + "\nCOMMIT;")
 
     @contextmanager
@@ -93,7 +104,7 @@ class IndexRepository:
                          "ELSE 'completed' END,last_error='已手动恢复中断任务' WHERE id=?", (video_id,))
 
     @contextmanager
-    def replace_index(self, video_id: int):
+    def replace_index(self, video_id: int, *, publish_guard=None):
         # Analysis writes to disk staging, leaving the main DB free to commit
         # task progress. Only publication locks the main DB; it remains atomic.
         staging_root = self.path.parent / ".index-staging"
@@ -111,7 +122,7 @@ class IndexRepository:
                 stage.execute("DETACH DATABASE source")
                 yield IndexWriter(stage, video_id)
                 stage.commit()
-                with self.transaction() as conn:
+                with (publish_guard() if publish_guard else nullcontext()), self.transaction() as conn:
                     conn.execute("DELETE FROM events WHERE video_id=?", (video_id,))
                     conn.execute("DELETE FROM detections WHERE video_id=?", (video_id,))
                     conn.executemany(
@@ -140,9 +151,14 @@ class IndexRepository:
             conn.execute("UPDATE videos SET merge_gap=?,min_samples=? WHERE id=?",
                          (merge_gap, min_samples, video_id))
 
-    def search(self, class_name: str | None, video_id: int | None = None, start_time=None, end_time=None):
+    def search(self, class_name: str | None, video_id: int | None = None, start_time=None, end_time=None,
+               *, include_counts=False):
+        counts = (",(SELECT COALESCE(MAX(n),0) FROM (SELECT COUNT(*) AS n FROM detections d "
+                  "WHERE d.video_id=e.video_id AND d.class_name=e.class_name "
+                  "AND d.timestamp BETWEEN e.start_time AND e.end_time "
+                  "GROUP BY d.frame_index,d.timestamp)) AS max_count" if include_counts else "")
         sql = ("SELECT e.id AS event_id,v.id AS video_id,v.name AS video_name,e.class_name,e.start_time,e.end_time,"
-               "e.end_time-e.start_time AS duration,e.sample_count FROM events e "
+               "e.end_time-e.start_time AS duration,e.sample_count" + counts + " FROM events e "
                "JOIN videos v ON v.id=e.video_id WHERE v.analysis_key IS NOT NULL")
         params = []
         if class_name is not None:

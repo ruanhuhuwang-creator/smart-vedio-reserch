@@ -25,7 +25,15 @@ export function useTaskPolling(taskId: Ref<string | null>) {
     }
   }
   function retry() { stop(); error.value = ''; if (taskId.value) void poll(taskId.value, generation) }
+  function accept(result: Task) {
+    if (result.task_id !== taskId.value) return
+    stop(); error.value = ''; task.value = result
+    if (result.status === 'queued' || result.status === 'running') {
+      const version = generation
+      timer = setTimeout(() => void poll(result.task_id, version), 2000)
+    }
+  }
   watch(taskId, () => { stop(); task.value = null; error.value = ''; if (taskId.value) void poll(taskId.value, generation) }, { immediate: true })
   onScopeDispose(stop)
-  return { task, error, retry }
+  return { task, error, retry, accept }
 }
