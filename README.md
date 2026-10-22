@@ -1,5 +1,7 @@
 # SmartVision 智能视频分析与检索
 
+片尾时间戳容错修复与新版本验收见 [PTS_HOTFIX_VALIDATION.md](PTS_HOTFIX_VALIDATION.md)。
+
 前后端分离：Vue 3 + Vite 前端通过 REST API 调用 Python 3.11 + FastAPI 后端。
 当前支持视频上传、后台分析任务、持久化进度、SQLite 索引、类别检索和原视频 Range 播放，
 并保留第一、第二阶段 CLI。第四阶段已实现 Vue 可视化控制台；片段剪辑和大模型检索留待后续阶段，没有 Gradio 依赖。
@@ -10,7 +12,8 @@
 完整解压发布 ZIP 后运行 `SmartVision.exe`，无需安装 Python/Node 或手动启动服务。
 默认用户数据和日志在 `%LOCALAPPDATA%\SmartVision`，不会使用或迁移开发目录中的 data。
 
-本次交付：`release/20261021-111002/dist/SmartVision/`；最终归档：`release/20261021-111002/SmartVision-win64-validated.zip`。
+最新片尾 PTS 修复版：`release/20261021-pts-hotfix/dist/SmartVision/`；归档：`release/20261021-pts-hotfix/SmartVision-win64-pts-fixed.zip`。
+首版交付 `release/20261021-111002/` 保留；修复版真实 EXE 验证及测试结果见 `PTS_HOTFIX_VALIDATION.md`。
 目录约 4.99 GB、ZIP 约 3.09 GB，主要体积来自保留的 CUDA 版 PyTorch 运行库。
 完整验证及未验证项见 `PHASE5_VALIDATION.md`，普通用户说明见 `packaging/USER_GUIDE.md`，构建说明见 `packaging/README_PACKAGING.md`。
 Windows 界面工具未获应用授权，实际鼠标双击与窗口按钮点击尚未验证；未在第二台没有 Python/Node 的干净电脑测试。

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 class FrameTimestamp:
     seconds: float
     duration: float
+    indexable: bool = True
 
 
 class VideoTimestamps:
@@ -30,6 +31,15 @@ class VideoTimestamps:
         self.last_end = 0.0
         self.duration_seconds = 0.0
         self.estimated_tail = False
+        self.skipped_tail_frames = 0
+
+    def _can_skip_tail(self, relative: float) -> bool:
+        """Only tolerate a tiny terminal suffix; never invent replacement PTS."""
+        window = min(0.5, self.duration_seconds * 0.1)
+        return (self.duration_seconds > 0 and self.skipped_tail_frames < 3
+                and relative >= self.duration_seconds - window
+                and self.previous <= self.duration_seconds + 1 / self.fps
+                and 0 <= self.previous - relative <= 0.2 + 1e-6)
 
     def __enter__(self):
         executable = shutil.which("ffprobe")
@@ -80,8 +90,12 @@ class VideoTimestamps:
                 if self.origin is None:
                     self.origin = pts
                 relative = pts - self.origin
-                if relative <= self.previous:
-                    raise ValueError("PTS 不严格递增")
+                indexable = relative > self.previous
+                if not indexable and not self._can_skip_tail(relative):
+                    raise ValueError(f"PTS 不严格递增（前值 {self.previous:.6f} 秒，"
+                                     f"当前 {relative:.6f} 秒，超出片尾容错范围）")
+                if indexable and self.skipped_tail_frames:
+                    raise ValueError("异常 PTS 后仍有新的递增帧，不属于可忽略的连续尾帧")
                 raw_duration = fields.get("duration_time", fields.get("pkt_duration_time", "0"))
                 duration = float(raw_duration) if raw_duration != "N/A" else 0.0
                 if not math.isfinite(duration) or duration <= 0:
@@ -89,9 +103,18 @@ class VideoTimestamps:
                     self.estimated_tail = True
             except (ValueError, TypeError) as exc:
                 raise VideoIOError(f"视频时间戳无效: {exc}") from exc
-            self.previous = relative
-            self.last_end = relative + duration
-            yield FrameTimestamp(relative, duration)
+            if indexable:
+                self.previous = relative
+                self.last_end = relative + duration
+            else:
+                self.skipped_tail_frames += 1
+                self.estimated_tail = True
+                logger.warning("跳过异常尾帧索引 #%d: PTS=%.6f 秒，前值=%.6f 秒；"
+                               "保留原视频及帧对应关系，不补造时间戳",
+                               self.skipped_tail_frames, relative, self.previous)
+            # Yield once per decoded frame, including rejected tail frames, so
+            # OpenCV and FFprobe remain aligned. The analyzer skips inference.
+            yield FrameTimestamp(relative, duration, indexable)
         return_code = self.process.wait(timeout=30)
         self.errors.seek(0)
         error = self.errors.read(2000).decode("utf-8", errors="replace").strip()

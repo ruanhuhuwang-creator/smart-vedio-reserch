@@ -54,6 +54,7 @@ class ScanSummary:
     elapsed_seconds: float
     inference_seconds: float
     estimated_tail: bool
+    skipped_tail_frames: int = 0
 
 
 class VideoAnalyzer:
@@ -84,7 +85,7 @@ class VideoAnalyzer:
                 stamp = next(timestamps, None)
                 if stamp is None:
                     raise VideoIOError("FFprobe 时间戳数量少于 OpenCV 解码帧数")
-                if analysis_fps is None or stamp.seconds + 1e-6 >= next_boundary:
+                if stamp.indexable and (analysis_fps is None or stamp.seconds + 1e-6 >= next_boundary):
                     before = perf_counter()
                     detections = self.detector.detect(frame)
                     inference += perf_counter() - before
@@ -103,7 +104,8 @@ class VideoAnalyzer:
             if duration <= timing.previous:
                 raise VideoIOError("视频时长小于最后一帧时间戳")
             return ScanSummary(info, duration, processed, analyzed, count,
-                               perf_counter() - started, inference, timing.estimated_tail)
+                               perf_counter() - started, inference, timing.estimated_tail,
+                               timing.skipped_tail_frames)
 
     def analyze(self, input_path: Path, output_path: Path, *, frame_interval: int = 1,
                 on_frame: Callable[[FrameResult], None] | None = None,
