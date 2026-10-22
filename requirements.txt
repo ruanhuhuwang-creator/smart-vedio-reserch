@@ -1,0 +1,10 @@
+# Install CUDA-enabled torch/torchvision first; see README.
+torch>=2.7,<3
+torchvision>=0.22,<1
+ultralytics>=8.4,<9
+opencv-python>=4.10,<5
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+pytest>=8,<10
+httpx>=0.27,<1
+python-multipart>=0.0.20,<1
