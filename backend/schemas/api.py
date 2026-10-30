@@ -1,3 +1,5 @@
+# API 数据协议：Pydantic 负责检查请求参数，并声明响应字段、生成 OpenAPI 文档。
+# 例如 imgsz 只允许三个值；额外字段会被拒绝，前端不能任意传 YOLO 参数。
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field

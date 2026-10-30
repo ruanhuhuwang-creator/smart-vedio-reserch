@@ -8,6 +8,7 @@ const props = defineProps<{ video: Video | null }>()
 const emit = defineEmits<{ time: [seconds: number] }>()
 const element = ref<HTMLVideoElement>(), root = ref<HTMLElement>(), error = ref(''), notice = ref(''), ready = ref(false)
 const source = computed(() => props.video?.browser_compatible ? apiUrl(props.video.stream_url) : undefined)
+// 用户可能先点事件、后等到视频加载；先记住跳转秒数，loaded 后再执行。
 let pendingSeek: number | null = null, controller: AbortController | undefined
 watch(() => props.video?.video_id, () => {
   controller?.abort(); error.value = ''; notice.value = ''; ready.value = false; pendingSeek = null; emit('time', 0)
@@ -33,6 +34,7 @@ async function seek(seconds: number) {
 function loaded() { ready.value = true; if (pendingSeek !== null) { const seconds = pendingSeek; pendingSeek = null; void seek(seconds) } }
 function reload() { error.value = ''; element.value?.load() }
 onBeforeUnmount(() => controller?.abort())
+// 把 seek 暴露给父页面，父页面不必直接操作本组件内部的 video 元素。
 defineExpose({ seek })
 </script>
 <template>

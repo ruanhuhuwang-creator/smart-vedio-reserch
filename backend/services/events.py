@@ -1,3 +1,6 @@
+# 时间段合并工具：只判断某类别是否连续出现，不识别是不是同一个人。
+# 例如 person 在 120、120.5、121 秒出现，可合并为 [120,121]；不推测间隙里的真实人数。
+
 """Category presence events, without tracking identities or assuming truth."""
 from dataclasses import dataclass
 import math
@@ -26,6 +29,7 @@ def merge_observations(observations: Iterable, *, duration: float, merge_gap: fl
     category = None
     start = end = 0.0
     count = 0
+    # count 数的是不同采样时刻，不是人数；同一帧 5 个人只算一次“该类别出现”。
     previous_key = None
     for row in observations:
         name, timestamp = row[0], float(row[1])
@@ -38,6 +42,8 @@ def merge_observations(observations: Iterable, *, duration: float, merge_gap: fl
         if timestamp > duration + 1e-6:
             continue
         timestamp = min(duration, timestamp)
+        # 换了类别，或距离上次出现太久，就结算上一段，另起一段。
+        # 1e-6 是浮点误差余量，避免本来相等的边界因小数误差被拆开。
         if name != category or timestamp - end > merge_gap + 1e-6:
             if count >= min_samples:
                 yield Event(category, start, end, count)

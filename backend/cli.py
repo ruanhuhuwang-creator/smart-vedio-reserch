@@ -1,3 +1,6 @@
+# 第一阶段命令行入口：输入视频 → 逐帧检测和画框 → 输出新 MP4。
+# 它用于生成标注视频；网页检索走 index_cli / IndexingService 的索引流程。
+
 """Run from the project root: python -m backend.cli INPUT OUTPUT."""
 import argparse
 import logging

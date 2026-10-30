@@ -1,4 +1,5 @@
 """Managed uploads: clients supply bytes and display names, never server paths."""
+# 上传服务：浏览器只交文件内容和显示名称，服务器自己生成存储名，不接受客户端指定磁盘路径。
 from hashlib import sha256
 import json
 import math
@@ -16,6 +17,8 @@ from backend.database.api_repository import APIRepository
 
 
 def public_video(row):
+    # 对外字段与内部表分开：网页拿到 stream_url，不拿到服务器真实磁盘路径。
+    # 最近任务失败/停止与“有旧索引可用”可同时成立，因此两个状态必须分别返回。
     task_status = row.get("latest_task_status")
     if row.get("active_task_id"):
         status = task_status
@@ -113,6 +116,7 @@ class VideoService:
         try:
             size = 0
             digest = sha256()
+            # 分块接收并计算内容指纹；上传和校验失败时清理本次文件，不一次性占满内存。
             with partial.open("xb") as target:
                 while block := await upload.read(1024 * 1024):
                     size += len(block)

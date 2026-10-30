@@ -1,3 +1,6 @@
+# 建索引的业务总管：查缓存 → 调检测流程 → 暂存检测 → 合并事件 → 发布到数据库。
+# 它把 core（看画面）和 database（存结果）接起来，供 CLI 和后台任务共同调用。
+
 from dataclasses import dataclass
 from contextlib import nullcontext
 from hashlib import sha256
@@ -59,11 +62,13 @@ class IndexingService:
             package_version = version("ultralytics")
         except PackageNotFoundError:
             package_version = "unknown"
+        # 相同视频也可能用不同参数分析；把影响检测的设置做成指纹，防止误复用旧结果。
         settings = {"analysis_fps": indexing.analysis_fps, "confidence": detection.confidence,
                     "image_size": detection.image_size, "model_version": package_version,
                     "weights": file_hash(detection.weights) if detection.weights.is_file() else str(detection.weights)}
         key = sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
         video_id, reused = self.repository.claim(content_hash, info, key, force=force)
+        # reused=True 表示视频内容及检测参数匹配，直接使用已完成检测，不再跑 YOLO。
         if reused:
             video = self.repository.get_video(video_id)
             if video["merge_gap"] != indexing.merge_gap or video["min_samples"] != indexing.min_samples:
@@ -79,6 +84,7 @@ class IndexingService:
                 on_device(getattr(detector, "device", "mock"))
             if check_cancel:
                 check_cancel()
+            # 检测过程中先写临时库，全部成功才替换正式索引；失败/取消保留上次有效结果。
             with self.repository.replace_index(video_id, publish_guard=publish_guard) as writer:
                 summary = VideoAnalyzer(detector).scan(path, analysis_fps=indexing.analysis_fps,
                                                       on_frame=writer.add_frame, on_progress=on_progress)

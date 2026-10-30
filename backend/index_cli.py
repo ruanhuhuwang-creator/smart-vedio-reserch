@@ -1,3 +1,6 @@
+# 索引命令行入口：analyze 建索引，search 查已存结果，rebuild-events 重新合并时间段。
+# 只有需要新检测时才调用 YOLO，普通搜索不重新分析视频。
+
 """Index/search command line, without changing the phase-one export CLI."""
 import argparse
 from dataclasses import asdict

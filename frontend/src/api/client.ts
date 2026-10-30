@@ -2,6 +2,7 @@
 export const API_BASE = (import.meta.env.PROD ? window.location.origin :
   (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000')).replace(/\/$/, '')
 
+// 统一的错误对象：status 是 HTTP 状态码，code 是后端业务错误标记，message 给用户看。
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string, public detail?: unknown) {
     super(message); this.name = 'ApiError'
@@ -25,6 +26,7 @@ export async function responseError(response: Response) {
 }
 export async function request<T>(path: string, options: RequestInit & { timeout?: number } = {}): Promise<T> {
   const { timeout = 15000, signal, ...init } = options
+  // AbortController 像请求的停止开关：超时或切换页面时中断请求，并在 finally 清理定时器。
   const controller = new AbortController()
   let timedOut = false
   const abort = () => controller.abort()
@@ -34,6 +36,7 @@ export async function request<T>(path: string, options: RequestInit & { timeout?
   try {
     const response = await fetch(apiUrl(path), { ...init, signal: controller.signal })
     if (!response.ok) throw await responseError(response)
+    // T 帮 TypeScript 检查调用代码，但不会在运行时验证 JSON；字段仍必须遵守真实后端协议。
     return await response.json() as T
   } catch (error) {
     if (timedOut) throw new ApiError(0, '请求超时，请检查服务状态后重试')

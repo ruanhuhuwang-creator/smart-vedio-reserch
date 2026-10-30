@@ -3,9 +3,11 @@ import { getTask } from '@/api/tasks'
 import { errorMessage } from '@/api/client'
 import type { Task } from '@/types/api'
 
+// 可复用的轮询逻辑：拿任务 ID 查询状态，等一次请求完成后再安排下一次。
 export function useTaskPolling(taskId: Ref<string | null>) {
   const task = ref<Task | null>(null)
   const error = ref('')
+  // generation 像本轮查询的票号。换任务/停止时换票，旧请求即使迟到也不能覆盖新画面。
   let generation = 0
   let timer: ReturnType<typeof setTimeout> | undefined
   let controller: AbortController | undefined
@@ -34,6 +36,7 @@ export function useTaskPolling(taskId: Ref<string | null>) {
     }
   }
   watch(taskId, () => { stop(); task.value = null; error.value = ''; if (taskId.value) void poll(taskId.value, generation) }, { immediate: true })
+  // 组件卸载时关闭轮询，防止离开页面后还在请求后台。
   onScopeDispose(stop)
   return { task, error, retry, accept }
 }

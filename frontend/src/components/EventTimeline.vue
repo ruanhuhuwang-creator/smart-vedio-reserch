@@ -14,6 +14,7 @@ const lanes = computed(() => {
   }
   return result
 })
+// 位置 = 秒数 / 总时长 × 100%。例如 100 秒视频的第 25 秒，画在时间轴的 25% 处。
 const percent = (seconds: number) => Math.min(100, Math.max(0, props.duration > 0 ? seconds / props.duration * 100 : 0))
 </script>
 <template>

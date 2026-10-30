@@ -1,3 +1,6 @@
+# HTTP 接口目录：浏览器访问 URL 后，FastAPI 把请求交给下方对应函数。
+# 这里只接收参数、调用服务、整理响应；上传/排队/推理/查询各自由专门模块完成。
+
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from starlette.responses import FileResponse
 
@@ -26,6 +29,7 @@ def video_detail(video_id: int, request: Request):
 
 @router.post("/videos/{video_id}/analysis", status_code=202, response_model=TaskResponse, tags=["analysis"])
 def create_analysis(video_id: int, body: AnalysisRequest, request: Request):
+    # 202 表示已接单，不表示分析成功；前端还要 GET /api/tasks/{task_id} 查看最终状态。
     return request.app.state.tasks.submit(video_id, body.model_dump())
 
 
@@ -48,6 +52,7 @@ def video_events(video_id: int, request: Request, category: str | None = Query(N
                  end_time: float | None = Query(None, ge=0, allow_inf_nan=False)):
     row = request.app.state.videos.get(video_id)
     video = public_video(row)
+    # 尚无索引不能返回空数组冒充“没有人”；用 409 明确告诉前端现在还不能查。
     if not video["index_available"]:
         raise HTTPException(409, {"code": "index_not_ready", "analysis_status": video["analysis_status"],
                                   "active_task_id": video["active_task_id"], "message": "尚无有效索引，请先完成分析"})
@@ -73,5 +78,6 @@ def stream_video(video_id: int, request: Request):
     if not row["browser_compatible"]:
         raise HTTPException(415, {"code": "unsupported_browser_codec", "codec": row["video_codec"],
                                   "message": row["compatibility_message"]})
+    # FileResponse 处理浏览器的 Range（按字节分段读取），拖动播放不必下载整段视频。
     return FileResponse(path, media_type="video/mp4", filename=row["name"], content_disposition_type="inline",
                         headers={"X-Content-Type-Options": "nosniff"})

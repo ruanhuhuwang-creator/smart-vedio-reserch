@@ -1,3 +1,6 @@
+# 数据库访问层：把 SQL 集中在这里，让检测器完全不需要知道表结构。
+# videos 是视频资料卡；detections 每行是一个检测框；events 每行是某类别的一段出现时间。
+
 """SQLite access boundary. Detection/model code never knows about SQL."""
 from contextlib import contextmanager, nullcontext
 import logging
@@ -22,6 +25,7 @@ class IndexRepository:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
             if version not in (0, 1, 2, 3):
                 raise RuntimeError(f"不支持的 SQLite 数据库版本: {version}")
+            # user_version 是数据库结构版本；升级旧结构前先用 SQLite 自带备份保留原数据。
             if version in (1, 2):
                 backup = self.path.with_name(self.path.name + f".pre-v3.{uuid4().hex[:8]}.sqlite3")
                 with sqlite3.connect(backup) as destination:
@@ -54,6 +58,7 @@ class IndexRepository:
     @contextmanager
     def transaction(self):
         with self.connection() as conn:
+            # 事务是一组“全成或全不成”的操作：中途异常就 rollback，不能只写入一半。
             conn.execute("BEGIN IMMEDIATE")
             try:
                 yield conn
@@ -120,6 +125,8 @@ class IndexRepository:
                 stage.execute("INSERT INTO videos SELECT * FROM source.videos WHERE id=?", (video_id,))
                 stage.commit()
                 stage.execute("DETACH DATABASE source")
+                # 暂停在这里，让调用方把整段视频的检测结果写进临时库。
+                # 调用方正常离开 with 才继续下方发布；抛异常则跳过发布。
                 yield IndexWriter(stage, video_id)
                 stage.commit()
                 with (publish_guard() if publish_guard else nullcontext()), self.transaction() as conn:
@@ -153,6 +160,8 @@ class IndexRepository:
 
     def search(self, class_name: str | None, video_id: int | None = None, start_time=None, end_time=None,
                *, include_counts=False):
+        # 数量统计先 GROUP BY 按每帧数框，再 MAX 取事件内峰值。
+        # 例：两帧分别有 2、3 人，返回 3，不是 5；没有跟踪身份，不能当作去重人数。
         counts = (",(SELECT COALESCE(MAX(n),0) FROM (SELECT COUNT(*) AS n FROM detections d "
                   "WHERE d.video_id=e.video_id AND d.class_name=e.class_name "
                   "AND d.timestamp BETWEEN e.start_time AND e.end_time "
@@ -160,6 +169,7 @@ class IndexRepository:
         sql = ("SELECT e.id AS event_id,v.id AS video_id,v.name AS video_name,e.class_name,e.start_time,e.end_time,"
                "e.end_time-e.start_time AS duration,e.sample_count" + counts + " FROM events e "
                "JOIN videos v ON v.id=e.video_id WHERE v.analysis_key IS NOT NULL")
+        # 用户输入通过 ? 占位符绑定，不能直接拼进 SQL 字符串。
         params = []
         if class_name is not None:
             sql += " AND e.class_name=?"

@@ -1,3 +1,6 @@
+# 配置总表：模型参数、抽帧参数、上传限制和存储位置都从这里取。
+# 开发时数据放项目 data；EXE 模式放用户 LOCALAPPDATA，避免写进只读依赖目录。
+
 from dataclasses import dataclass
 from pathlib import Path
 import math

@@ -1,3 +1,6 @@
+# 后端总入口。create_app 像组装机器：接好数据库、视频服务和任务队列，再挂上 API。
+# 启动/关闭时执行 lifespan；真正的 YOLO 推理交给后台工作线程，不在健康检查里加载模型。
+
 import asyncio
 from contextlib import asynccontextmanager
 import logging
@@ -38,11 +41,13 @@ def create_app(config: APIConfig | None = None, *, detector_loader=YOLODetector,
             logger.info("SQLite 初始化成功: %s", config.database)
             videos = VideoService(repository, config)
             manager = TaskManager(repository, videos, config, detector_loader)
+            # application.state 相当于本次服务共享的工具箱，路由通过 request.app.state 取用。
             application.state.index = index
             application.state.repository = repository
             application.state.videos = videos
             application.state.tasks = manager
             manager.start()
+            # yield 前是服务启动准备；yield 后的 finally 是关闭时收尾。
             yield
         finally:
             stopped = True

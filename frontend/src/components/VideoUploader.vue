@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 选择或拖入文件 → 初步检查 → 调上传 API → emit 通知工作台刷新。
+// 扩展名检查只是提前提示，最终文件能否解码由后端验证。
 import { onBeforeUnmount, ref } from 'vue'
 import { uploadVideo } from '@/api/videos'
 import { errorMessage } from '@/api/client'

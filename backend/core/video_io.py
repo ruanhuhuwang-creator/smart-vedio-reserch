@@ -1,3 +1,6 @@
+# 视频读写工具：像翻书一样一次读一帧，不把整段视频装进内存。
+# with VideoReader(...) 进入时打开文件，离开时释放资源，报错也会释放。
+
 """Streaming OpenCV I/O. Only one frame is kept at a time."""
 from dataclasses import dataclass
 from pathlib import Path

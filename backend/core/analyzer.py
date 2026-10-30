@@ -1,3 +1,6 @@
+# 流程协调器，有两条路线：scan 只做抽帧检测供建索引，analyze 生成画框视频。
+# 回调就是调用方传来的函数：这里读到结果/进度就通知它，不需要知道它如何存库或显示。
+
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -20,6 +23,7 @@ class Detector(Protocol):
 
 @dataclass(frozen=True)
 class FrameResult:
+    # 帧号从 0 开始；timestamp_seconds 才是检索和播放跳转使用的秒数。
     frame_index: int
     timestamp_seconds: float
     detections: list[Detection]
@@ -75,6 +79,7 @@ class VideoAnalyzer:
         started = perf_counter()
         processed = analyzed = count = 0
         inference = 0.0
+        # 2 FPS 的采样边界为 0、0.5、1.0 秒……仍逐帧解码，只在跨过边界时推理。
         next_boundary = 0.0
         with VideoReader(input_path, strict_frame_count=False) as reader, VideoTimestamps(reader.path, reader.info.fps) as timing:
             info = reader.info
@@ -82,6 +87,7 @@ class VideoAnalyzer:
                 on_start(info)
             timestamps = iter(timing)
             for index, frame in enumerate(reader):
+                # 两个迭代器保持一帧配一个时间戳，数量不一致就报错，防止画面和秒数错位。
                 stamp = next(timestamps, None)
                 if stamp is None:
                     raise VideoIOError("FFprobe 时间戳数量少于 OpenCV 解码帧数")
@@ -94,6 +100,7 @@ class VideoAnalyzer:
                     if on_frame:
                         on_frame(FrameResult(index, stamp.seconds, detections, True))
                     if analysis_fps is not None:
+                        # 若时间跨过多个边界，直接推进到未来边界，不重复检测同一张画面。
                         next_boundary = (math.floor((stamp.seconds + 1e-6) * analysis_fps) + 1) / analysis_fps
                 processed += 1
                 if on_progress:
@@ -146,6 +153,7 @@ class VideoAnalyzer:
                             analyzed += 1
                             detection_count += len(detections)
                             frame = self.detector.draw(frame, detections)
+                        # 未检测的帧也写出，避免把稀疏结果伪装成完整连续的标注视频。
                         writer.write(frame)
                         processed += 1
                         if on_frame:

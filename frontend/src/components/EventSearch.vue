@@ -4,6 +4,7 @@ import type { VideoEvent, Video } from '@/types/api'
 import { categories, categoryName, categoryColor, time } from '@/utils/format'
 defineProps<{ video: Video | null; category: string; events: VideoEvent[]; loading: boolean; error: string; notReady: boolean; previous: boolean; searched: boolean; activeId: number | null }>()
 defineEmits<{ 'update:category': [category: string]; select: [event: VideoEvent]; refresh: [] }>()
+// 两个菜单只是同一份事件数据的两种显示方式；切换视图不会重新跑模型。
 const view = ref<'events' | 'counts'>('counts')
 </script>
 <template>

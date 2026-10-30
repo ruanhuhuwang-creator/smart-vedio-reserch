@@ -1,5 +1,7 @@
 # SmartVision 学习路线
 
+初次接触项目，请先读 [队友入门说明](TEAMMATE_START_HERE.md)，再按下面的路线深入。
+
 先阅读 README 的环境安装与运行命令。使用 Python 3.11、合适的 PyTorch CUDA/CPU 版本、FFmpeg/FFprobe、Node 和 npm；
 模型由官方预训练权重获取，首次使用后缓存在 models。仓库不包含运行数据和 EXE，打包见 packaging/README_PACKAGING.md。
 

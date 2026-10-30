@@ -1,4 +1,5 @@
 """Upload registry and durable task state; each call owns its SQLite connection."""
+# API 数据存取：补充视频列表、上传登记和任务状态；检测索引本身由 IndexRepository 管理。
 from datetime import datetime, timezone
 import json
 import sqlite3

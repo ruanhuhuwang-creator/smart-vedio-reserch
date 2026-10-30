@@ -1,3 +1,6 @@
+# 检索入口：检查类别/时间等查询条件，再让数据库查已有索引。
+# 这里不读视频、不加载 YOLO，所以分析一次后可以反复查询。
+
 from backend.database.repository import IndexRepository
 import math
 

@@ -1,3 +1,6 @@
+# 时间戳工具：FFprobe 告诉我们每帧真正该在第几秒显示，称为 PTS。
+# 变帧率视频不能简单用帧号/FPS 建索引；这里把第一帧 PTS 作为 0 秒基准。
+
 """Stream presentation timestamps from FFprobe, without keeping a video in memory."""
 from dataclasses import dataclass
 import json
@@ -35,6 +38,7 @@ class VideoTimestamps:
 
     def _can_skip_tail(self, relative: float) -> bool:
         """Only tolerate a tiny terminal suffix; never invent replacement PTS."""
+        # 只容忍非常靠近片尾的少量倒退帧；不把中途损坏当作正常，不给坏帧编造新时间。
         window = min(0.5, self.duration_seconds * 0.1)
         return (self.duration_seconds > 0 and self.skipped_tail_frames < 3
                 and relative >= self.duration_seconds - window

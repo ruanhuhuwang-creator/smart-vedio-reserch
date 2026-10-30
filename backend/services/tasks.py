@@ -1,3 +1,6 @@
+# 后台任务管理器：可以理解为一张待办单队列，只有一个工作线程依次取单执行。
+# HTTP 提交后马上给 task_id；任务状态写进 SQLite，前端拿 task_id 定期查询。
+
 """One bounded in-process queue and one inference worker, with durable SQLite state."""
 import json
 from contextlib import contextmanager
@@ -27,6 +30,7 @@ class UserCancelled(AnalysisInterrupted):
 
 @dataclass
 class TaskControl:
+    # 每张任务单有自己的停止信号，停止 A 不会误停正在处理的 B。
     cancel: threading.Event = field(default_factory=threading.Event)
     published: bool = False
 
@@ -43,6 +47,7 @@ class DetectorCache:
             self.detector = None
             self.detector = self.loader(config)
             self.key = (str(config.weights), file_hash(config.weights) if config.weights.is_file() else None, config.device)
+        # 置信度/尺寸改变可更新配置；权重/设备改变才重建检测器，避免每帧加载大模型。
         self.detector.config = config
         return self.detector
 
@@ -93,6 +98,7 @@ class TaskManager:
             if control.published:
                 raise HTTPException(409, "结果已提交，无法停止；请刷新任务状态")
             self.repository.request_cancel(task_id)
+            # set 只表示“请停止”；推理不能被随意强杀，工作线程到检查点才真正退出本任务。
             control.cancel.set()
             if task["status"] == "queued":
                 self.repository.cancelled(task_id)
@@ -152,6 +158,7 @@ class TaskManager:
             # Serialize the final atomic publication with cancellation acceptance.
             # Once publication wins, a late stop returns 409, never 'cancelled'
             # while silently replacing the previous valid index.
+            # 与 cancel 共用这把锁：要么先接受取消，要么先完成提交，避免状态与索引不一致。
             with self.lock:
                 check_cancel()
                 yield
@@ -172,6 +179,7 @@ class TaskManager:
                 nonlocal last_update
                 check_cancel()
                 now = time.monotonic()
+                # 限制写进度的频率，避免每帧都写数据库；取消检查仍然每次回调都执行。
                 if now - last_update >= 0.25 or value.processed_frames == value.total_frames:
                     self.repository.progress(task_id, value.processed_frames, value.total_frames)
                     last_update = now

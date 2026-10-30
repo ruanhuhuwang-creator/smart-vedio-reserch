@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 工作台总协调：子组件负责展示和发出操作，本页面负责调用 API、保存状态、串起播放器与结果。
+// ref 是会让页面自动更新的变量；computed 是从已有变量推导出的值；watch 在变量变化时执行动作。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, errorMessage, request } from '@/api/client'
 import { analyzeVideo, getAnalysisContract, getEvents, getVideo, listVideos } from '@/api/videos'
@@ -54,10 +56,12 @@ async function loadList(nextOffset = offset.value) {
   } catch (error) { if (!controller.signal.aborted) listError.value = errorMessage(error) }
   finally { if (listController === controller) listLoading.value = false }
 }
+// 刷新只恢复任务 ID 并查询状态，不重新 POST 分析，避免刷新产生重复任务。
 function restoreTask(video: Video) {
   taskId.value = video.active_task_id || readLocal(`video:${video.video_id}:task`)
 }
 async function selectVideo(id: number) {
+  // 用户快速切换 A→B 时，取消 A 的请求；版本号还会拦住异步迟到响应。
   selectionVersion++
   detailController?.abort(); eventController?.abort()
   const controller = new AbortController(); detailController = controller
@@ -101,6 +105,7 @@ async function search() {
     }
   } finally { if (eventController === controller) eventLoading.value = false }
 }
+// 点“开始分析” → 提交一次 → 得到 task_id → useTaskPolling 接手查询进度。
 async function submit(options: AnalysisOptions) {
   if (!selected.value || submitting.value) return
   const id = selected.value.video_id
@@ -120,6 +125,7 @@ async function submit(options: AnalysisOptions) {
     }
   } finally { submitting.value = false }
 }
+// 点“停止”只是发出停止请求，最终是否 cancelled 仍听后台状态，不能在前端自称成功。
 async function stopAnalysis() {
   const id = activeTaskId.value, version = selectionVersion
   if (!id || stopping.value) return
@@ -146,6 +152,7 @@ watch(task, (value, old) => {
     void loadList()
   }
 })
+// 结果卡片和时间轴共用跳转入口；start_time 是视频秒数，不是帧编号。
 function jump(event: VideoEvent) { activeId.value = event.event_id; void player.value?.seek(event.start_time) }
 async function uploaded(video: Video) { offset.value = 0; await selectVideo(video.video_id); void loadList(0) }
 function reconnect() { void health(); void loadContract(); void loadList() }

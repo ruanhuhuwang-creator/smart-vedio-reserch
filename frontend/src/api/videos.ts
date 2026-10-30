@@ -4,6 +4,7 @@ import type { AnalysisContract, AnalysisOptions, EventPage, Task, Video, VideoPa
 export const listVideos = (offset = 0, limit = 8, signal?: AbortSignal) => request<VideoPage>(`/api/videos?offset=${offset}&limit=${limit}`, { signal })
 export const getVideo = (id: number, signal?: AbortSignal) => request<Video>(`/api/videos/${id}`, { signal })
 export function uploadVideo(file: File, signal?: AbortSignal) {
+  // 后端参数叫 file，所以表单字段名也必须是 file；Content-Type 的 multipart 边界交给浏览器生成。
   const form = new FormData(); form.append('file', file)
   return request<Video>('/api/videos', { method: 'POST', body: form, timeout: 300000, signal })
 }
